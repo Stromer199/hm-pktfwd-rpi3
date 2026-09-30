@@ -157,28 +157,30 @@ and accepted traffic can improve; software cannot guarantee higher rewards.
 
 ## Building
 
-### Pre built containers
+### Source builds
 
-This repo automatically builds docker containers and uploads them to two repositories for easy access:
-- [hm-pktfwd on DockerHub](https://hub.docker.com/r/nebraltd/hm-pktfwd)
-- [hm-pktfwd on GitHub Packages](https://github.com/NebraLtd/hm-pktfwd/pkgs/container/hm-pktfwd)
+This fork builds the packet forwarder and SX1302 HAL from the revisions pinned in
+`vendor/`. Clone recursively so those sources are present in the Docker context:
 
-The images are tagged using the docker long and short commit SHAs for that release. The current version deployed to miners can be found in the [helium-miner-software repo](https://github.com/NebraLtd/helium-miner-software/blob/production/docker-compose.yml).
+```sh
+git clone --recursive --branch repair/balenaos8-reliability https://github.com/Stromer199/hm-pktfwd-rpi3.git
+cd hm-pktfwd-rpi3
+git submodule update --init --recursive
+```
+
+The GitHub build workflow validates ARM64 images on pull requests and manual
+runs. It does not publish images to the inherited Nebra registries. Deployments
+use the source build configured in the corresponding `Stromer199/helium-*`
+fleet repository; follow that repository's deployment instructions.
 
 ### Manual build
 
-When developing, it is faster to build locally instead of relying on the pre-built container to generate.
+```sh
+# Build and load the ARM64 image into the local Docker image store.
+docker buildx build --platform linux/arm64/v8 --progress=plain --load -t hm-pktfwd:latest .
 
-```bash
-# Cross-compile
-docker buildx build --platform linux/arm64/v8 --progress=plain -t DOCKERHUB_USER/hm-pktfwd .
-
-# To stop at an intermediary stage
-docker buildx build --platform linux/arm64/v8 --progress=plain --target pktfwd-builder -t pktfwd-builder .
-
-# Tag and push image
-docker image tag docker.io/DOCKERHUB_USER/hm-pktfwd DOCKERHUB_USER/hm-pktfwd:0.0.X
-docker push DOCKERHUB_USER/hm-pktfwd:0.0.X
+# Optionally stop at the Python dependency stage.
+docker buildx build --platform linux/arm64/v8 --progress=plain --load --target pktfwd-builder -t pktfwd-builder .
 ```
 
 ### Testing
@@ -194,8 +196,8 @@ docker push DOCKERHUB_USER/hm-pktfwd:0.0.X
 With the dependencies installed, do the following:
 
 ```
-$ git clone https://github.com/NebraLtd/hm-pktfwd.git
-$ cd hm-pktfwd
+$ git clone --recursive --branch repair/balenaos8-reliability https://github.com/Stromer199/hm-pktfwd-rpi3.git
+$ cd hm-pktfwd-rpi3
 $ docker build . -t hm-pktfwd
 ```
 
