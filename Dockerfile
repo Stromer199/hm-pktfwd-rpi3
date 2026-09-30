@@ -5,15 +5,27 @@
 ARG BUILD_BOARD=raspberrypi3-64
 ARG BUILD_ARCH=arm64
 
-# Set up correct image paths
-ARG PKTFWD_PATH=stromer199/packet_forwarder
-ARG SX1302_PATH=stromer199/sx1302_hal
+# Compile the pinned submodule sources used by this release.
+ARG LORA_GATEWAY_PATH=nebraltd/lora_gateway:$BUILD_ARCH-9d02824848a85035d63d00820c09d1508a29c29b
+# hadolint ignore=DL3006
+FROM $LORA_GATEWAY_PATH AS lora_gateway
 
-# Pull the builds for later use
-# hadolint ignore=DL3006
-FROM $SX1302_PATH AS sx1302_hal
-# hadolint ignore=DL3006
-FROM $PKTFWD_PATH AS packet_forwarder
+FROM balenalib/"$BUILD_BOARD"-debian:bullseye-build-20230530 AS sx1302_hal
+ENV ROOT_DIR=/opt
+ENV OUTPUT_DIR=/opt/output
+WORKDIR /opt
+COPY vendor/sx1302_hal/ /opt/
+RUN sh /opt/compile.sh
+
+FROM balenalib/"$BUILD_BOARD"-debian:bullseye-build-20230530 AS packet_forwarder
+ENV ROOT_DIR=/opt
+ENV LORA_GATEWAY_INPUT_DIR=/opt/lora_gateway_builds
+ENV PACKET_FORWARDER_INPUT_DIR=/opt/packet_forwarder
+ENV OUTPUT_DIR=/opt/output
+WORKDIR /opt
+COPY vendor/packet_forwarder/ /opt/packet_forwarder/
+COPY --from=lora_gateway /opt/output /opt/lora_gateway_builds
+RUN sh /opt/packet_forwarder/compile_lora_pkt_fwd.sh
 
 ####################################################################################################
 ########################### Stage: PktFwd Python App Builder #######################################

@@ -1,0 +1,6 @@
+[submodule "vendor/sx1302_hal"]
+	path = vendor/sx1302_hal
+	url = ../sx1302_hal.git
+[submodule "vendor/packet_forwarder"]
+	path = vendor/packet_forwarder
+	url = ../packet_forwarder.git
