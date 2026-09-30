@@ -22,7 +22,8 @@ class TestRecovery(TestCase):
         with tempfile.TemporaryDirectory() as directory:
             for is_sx1302 in (False, True):
                 with patch.dict(os.environ,
-                                {"PKTFWD_AUTOQUIT_THRESHOLD": "9"}):
+                                {"PKTFWD_AUTOQUIT_THRESHOLD": "9",
+                                 "PKTFWD_PUSH_TIMEOUT_MS": "12"}):
                     update_global_conf(is_sx1302, directory, *sources,
                                        "EU868", "spidev0.0")
                 local = json.loads((Path(directory) / "local_conf.json")
@@ -31,6 +32,7 @@ class TestRecovery(TestCase):
                                  "0000e45f01640801")
                 self.assertEqual(
                     local['gateway_conf']['autoquit_threshold'], 9)
+                self.assertEqual(local['gateway_conf']['push_timeout_ms'], 12)
                 if is_sx1302:
                     global_conf = json.loads(
                         (Path(directory) / "global_conf.json").read_text())
@@ -42,3 +44,15 @@ class TestRecovery(TestCase):
                 with self.assertRaises(ValueError):
                     update_global_conf(True, directory, *sources,
                                        "EU868", "spidev0.0")
+            with patch.dict(os.environ, {}, clear=True):
+                update_global_conf(True, directory, *sources,
+                                   "EU868", "spidev0.0")
+                rendered = json.loads(
+                    (Path(directory) / "global_conf.json").read_text())
+                self.assertEqual(rendered['gateway_conf']['push_timeout_ms'],
+                                 20)
+                for invalid in ("1", "1001", "2.5"):
+                    os.environ["PKTFWD_PUSH_TIMEOUT_MS"] = invalid
+                    with self.assertRaises(ValueError):
+                        update_global_conf(True, directory, *sources,
+                                           "EU868", "spidev0.0")

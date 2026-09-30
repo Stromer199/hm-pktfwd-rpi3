@@ -146,6 +146,12 @@ def load_local_conf(template_file):
     if not 1 <= threshold <= 120:
         raise ValueError("PKTFWD_AUTOQUIT_THRESHOLD must be between 1 and 120")
     local_conf['gateway_conf']['autoquit_threshold'] = threshold
+    # ACKs come from the local multiplexer. Bound the synchronous receive wait
+    # so an absent ACK does not delay the next radio FIFO fetch by 100 ms.
+    push_timeout = int(os.getenv('PKTFWD_PUSH_TIMEOUT_MS', '20'))
+    if not 2 <= push_timeout <= 1000:
+        raise ValueError("PKTFWD_PUSH_TIMEOUT_MS must be between 2 and 1000")
+    local_conf['gateway_conf']['push_timeout_ms'] = push_timeout
     return local_conf
 
 

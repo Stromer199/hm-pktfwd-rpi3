@@ -57,6 +57,7 @@ The following environment variables control various aspects of the program's ope
 | CONCENTRATOR_GPIO_CHIP | Auto-detected | No | Optional `/dev/gpiochipN` path. The controller must have a supported Raspberry Pi pinctrl label; the index is never assumed. |
 | CONCENTRATOR_RESET_PIN_OVERRIDE | Variant RESET offset | No | Override the reset line's controller offset, not the dynamic sysfs GPIO number. SenseCAP M1 uses offset 17 on both balenaOS 6 and 8. |
 | SX125x_RESET_PIN_OVERRIDE | Unset | No | Optional second reset line on the same controller. |
+| PKTFWD_PUSH_TIMEOUT_MS | 20 | No | Integer 2–1000. Maximum nominal upstream ACK wait in milliseconds for the local multiplexer; a matching ACK returns immediately. |
 | PKTFWD_AUTOQUIT_THRESHOLD | 6 | No | Integer 1–120. Restart after this many unanswered downstream keepalives so the multiplexer hostname is resolved again. |
 | ROOT_DIR | - | Yes | Directory the app will be run from. Should be the same location. `global_conf.json` will also be copied here. |
 | SX1302_LORA_PKT_FWD_FILEPATH | - | Yes | Path to built [sx1302 lora_pkt_fwd](https://github.com/NebraLtd/sx1302_hal/blob/69811057222f6f9cf8929ebfdb7fc6e36cc2618d/packet_forwarder/src/lora_pkt_fwd.c) executable. |
@@ -151,6 +152,13 @@ container replacement. The Python supervisor wakes immediately when the child
 exits instead of waiting out its 30-second diagnostics interval. Local templates
 are rendered to runtime files without modifying the originals, including a
 consistent gateway ID and recovery threshold in both SX1302 configuration files.
+The upstream ACK timeout defaults to 20 ms instead of 100 ms because these
+fleets send to a local multiplexer. When an ACK is absent, this bounds the
+synchronous wait before the next radio receive fetch to nominally 20 ms,
+reducing the previous bound by 80 ms. A matching ACK ends the wait immediately;
+healthy traffic does not incur a fixed 20 ms sleep. Very late ACKs can be omitted
+from ACK statistics. `PKTFWD_PUSH_TIMEOUT_MS` accepts integers from 2 to 1000;
+the minimum avoids a zero socket timeout after the C forwarder halves it.
 Regional channels, power limits and CRC filtering remain unchanged. Availability
 and accepted traffic can improve; software cannot guarantee higher rewards.
 
