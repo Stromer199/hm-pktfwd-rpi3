@@ -2,7 +2,8 @@ import os
 from hm_pyhelper.hardware_definitions import variant_definitions
 from pktfwd.utils import init_sentry, is_concentrator_sx1302, \
                         update_global_conf, write_diagnostics, \
-                        await_system_ready, retry_start_concentrator
+                        await_system_ready, retry_start_concentrator, \
+                        run_reset_lgw
 from hm_pyhelper.logger import get_logger
 from hm_pyhelper.miner_param import retry_get_region, await_spi_available
 
@@ -39,8 +40,9 @@ class PktfwdApp:
         LOGGER.debug("STARTING PKTFWD")
         self.prepare_to_start()
 
-        is_sx1302 = is_concentrator_sx1302(self.util_chip_id_filepath,
-                                           self.spi_bus)
+        is_sx1302 = is_concentrator_sx1302(
+            self.util_chip_id_filepath, self.spi_bus,
+            require_sx1302=self.variant in ("COMP-SENSECAPM1", "sensecap-fl1"))
 
         update_global_conf(is_sx1302, self.root_dir,
                            self.sx1301_region_configs_dir,
@@ -74,6 +76,8 @@ class PktfwdApp:
         LOGGER.debug("Region set to %s" % self.region)
 
         await_system_ready(self.await_system_sleep_seconds)
+        # A failed reset is an I/O error, never evidence of an SX1301 chip.
+        run_reset_lgw(self.reset_lgw_filepath)
         LOGGER.debug("Finished preparing pktfwd")
 
     def stop(self):

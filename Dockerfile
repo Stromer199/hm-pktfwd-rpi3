@@ -36,6 +36,12 @@ RUN pip3 install --target="$OUTPUT_DIR" --no-cache-dir -r requirements.txt
 ################################## Stage: runner ##################################################
 FROM balenalib/"$BUILD_BOARD"-debian-python:bullseye-run-20230530 AS pktfwd-runner
 
+# GPIO character-device bindings use the matching Debian system interpreter.
+# Bullseye security packages have moved off the live mirror; retain signed metadata.
+RUN sed -i 's|deb http://deb.debian.org/debian-security |deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260831T000000Z |' /etc/apt/sources.list && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    python3-libgpiod=1.6.2-1 && rm -rf /var/lib/apt/lists/*
+
 ENV ROOT_DIR=/opt
 
 # Copy from: Locations of build assets within images of earlier stages

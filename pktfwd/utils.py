@@ -66,11 +66,12 @@ def run_reset_lgw(reset_lgw_filepath):
     """
     Invokes reset_lgw.sh script with the reset pin value.
     """
-    subprocess.run([reset_lgw_filepath, "stop"])
-    subprocess.run([reset_lgw_filepath, "start"])
+    subprocess.run([reset_lgw_filepath, "stop"], check=True, timeout=10)
+    subprocess.run([reset_lgw_filepath, "start"], check=True, timeout=10)
 
 
-def is_concentrator_sx1302(util_chip_id_filepath, spi_bus):
+def is_concentrator_sx1302(
+        util_chip_id_filepath, spi_bus, require_sx1302=False):
     """
     Use the util_chip_id to determine if concentrator is sx1302.
     util_chip_id calls the sx1302_hal reset_lgw.sh script during execution.
@@ -79,17 +80,22 @@ def is_concentrator_sx1302(util_chip_id_filepath, spi_bus):
 
     try:
         subprocess.run(util_chip_id_cmd, capture_output=True,
-                       text=True, check=True)
+                       text=True, check=True, timeout=30)
         LOGGER.debug("SX1302 / SX1303 detected. \
                      util_chip_id script exited without error.")
         return True
     # CalledProcessError raised if there is a non-zero exit code
     # https://docs.python.org/3/library/subprocess.html#using-the-subprocess-module
-    except subprocess.CalledProcessError as e:
-        LOGGER.debug(e)
-    except Exception:
-        LOGGER.exception("SX1301 detected.\
-                          util_chip_id script exited with error.")
+    except subprocess.CalledProcessError as error:
+        output = "%s\n%s" % (error.stdout or "", error.stderr or "")
+        LOGGER.warning("SX1302 probe failed (code %s): %s",
+                       error.returncode, output.strip())
+        if (require_sx1302 or "GPIO reset failed" in output or
+                "failed to reset SX1302" in output):
+            raise RuntimeError("SX1302 probe/reset failed; refusing SX1301 "
+                               "fallback") from error
+        # Mixed SX1301/SX1302 hardware still uses the legacy probe, but only
+        # after a checked GPIO reset. Missing tools/timeouts propagate above.
 
     return False
 
