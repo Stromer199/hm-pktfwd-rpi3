@@ -57,15 +57,16 @@ The following environment variables control various aspects of the program's ope
 | CONCENTRATOR_GPIO_CHIP | Auto-detected | No | Optional `/dev/gpiochipN` path. The controller must have a supported Raspberry Pi pinctrl label; the index is never assumed. |
 | CONCENTRATOR_RESET_PIN_OVERRIDE | Variant RESET offset | No | Override the reset line's controller offset, not the dynamic sysfs GPIO number. SenseCAP M1 uses offset 17 on both balenaOS 6 and 8. |
 | SX125x_RESET_PIN_OVERRIDE | Unset | No | Optional second reset line on the same controller. |
+| PKTFWD_AUTOQUIT_THRESHOLD | 6 | No | Integer 1–120. Restart after this many unanswered downstream keepalives so the multiplexer hostname is resolved again. |
 | ROOT_DIR | - | Yes | Directory the app will be run from. Should be the same location. `global_conf.json` will also be copied here. |
 | SX1302_LORA_PKT_FWD_FILEPATH | - | Yes | Path to built [sx1302 lora_pkt_fwd](https://github.com/NebraLtd/sx1302_hal/blob/69811057222f6f9cf8929ebfdb7fc6e36cc2618d/packet_forwarder/src/lora_pkt_fwd.c) executable. |
 | SX1301_LORA_PKT_FWD_DIR | - | Yes | Directory that contains [sx1301 lora_pkt_fwd](https://github.com/NebraLtd/packet_forwarder/tree/e8f24fe37ba555e5ad1ddf8eed26d0136f30f8de/lora_pkt_fwd) executables for all SPI buses. |
 | LORA_PKT_FWD_BEFORE_CHECK_SLEEP_SECONDS | 5 | No | Duration after starting lora_pkt_fwd before establishing if it started successfully. |
-| LORA_PKT_FWD_AFTER_SUCCESS_SLEEP_SECONDS | 30 | No | Duration to poll status after concentrator starts successfully. |
+| LORA_PKT_FWD_AFTER_SUCCESS_SLEEP_SECONDS | 30 | No | Maximum diagnostics/region polling interval. A child process exit wakes the wait immediately. |
 | LORA_PKT_FWD_AFTER_FAILURE_SLEEP_SECONDS | 2 | No | Duration to wait before restarting when concentrator exits with 0. If it exits with code greater than 0, program exits and container restarts. |
 | LOGLEVEL | DEBUG | No | TRACE, DEBUG, INFO, WARN, etc. |
 | REGION_FILEPATH | /var/pktfwd/region | No | Path where hm-miner [writes the region](https://github.com/NebraLtd/hm-miner/blob/8819d5439dc23b45a905ff126078aa59c5be3de8/gen-region.sh#L9). |
-| DIAGNOSTICS_FILEPATH | /var/pktfwd/diagnostics | No | File containing "true" or "false" for whether lora_pkt_fwd is successfully running or not. |
+| DIAGNOSTICS_FILEPATH | /var/pktfwd/diagnostics | No | Process-alive indicator (`true`/`false`); it does not prove radio reception or upstream acceptance. |
 | AWAIT_SYSTEM_SLEEP_SECONDS | 5 | No | How long [app sleeps](https://github.com/NebraLtd/hm-pktfwd/issues/63) before starting concentrator. |
 | SENTRY_KEY | False | No | Key for Sentry. Sentry inactive if key is False. |
 | REGION_OVERRIDE | False | No | Region override. eg `US915`. |
@@ -143,6 +144,15 @@ with gpiod.Chip(device) as chip:
 PY
 ```
 
+The default six missed downstream keepalives trigger recovery in roughly one
+minute with the existing 10-second keepalive interval, followed by process
+restart and radio initialization. This recovers a stale multiplexer IP after a
+container replacement. The Python supervisor wakes immediately when the child
+exits instead of waiting out its 30-second diagnostics interval. Local templates
+are rendered to runtime files without modifying the originals, including a
+consistent gateway ID and recovery threshold in both SX1302 configuration files.
+Regional channels, power limits and CRC filtering remain unchanged. Availability
+and accepted traffic can improve; software cannot guarantee higher rewards.
 
 
 ## Building

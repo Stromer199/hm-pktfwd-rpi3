@@ -124,7 +124,7 @@ def update_global_conf(is_sx1302, root_dir, sx1301_region_configs_dir,
                                                  region)
 
 
-def populate_local_conf_template(template_file):
+def load_local_conf(template_file):
     mac_addrs = {'E0': '', 'W0': ''}
     get_ethernet_addresses(mac_addrs)
 
@@ -133,12 +133,20 @@ def populate_local_conf_template(template_file):
         mac_address = mac_addrs.get('W0')
 
     gateway_id = mac_address.replace(':', '')
+    if len(gateway_id) != 12 or any(
+            char not in '0123456789abcdefABCDEF' for char in gateway_id):
+        raise ValueError("No valid Ethernet or Wi-Fi MAC for gateway identity")
     with open(template_file) as file_:
         template = Template(file_.read())
 
-    rendered = template.render(gateway_id=gateway_id)
-    with open(template_file, "w") as file_:
-        file_.write(rendered)
+    local_conf = json.loads(template.render(gateway_id=gateway_id))
+    # Re-resolve the multiplexer after prolonged loss of downstream ACKs.
+    # Its container address can change independently of this container.
+    threshold = int(os.getenv('PKTFWD_AUTOQUIT_THRESHOLD', '6'))
+    if not 1 <= threshold <= 120:
+        raise ValueError("PKTFWD_AUTOQUIT_THRESHOLD must be between 1 and 120")
+    local_conf['gateway_conf']['autoquit_threshold'] = threshold
+    return local_conf
 
 
 def replace_sx1301_global_conf_with_regional(root_dir,
@@ -163,8 +171,9 @@ def replace_sx1301_global_conf_with_regional(root_dir,
     copyfile(region_config_filepath, global_config_filepath)
     LOGGER.debug("Copying SX1301 local conf from %s to %s" %
                  (old_local_config_filepath, local_config_filepath))
-    populate_local_conf_template(old_local_config_filepath)
-    copyfile(old_local_config_filepath, local_config_filepath)
+    local_conf = load_local_conf(old_local_config_filepath)
+    with open(local_config_filepath, 'w') as local_config_file:
+        json.dump(local_conf, local_config_file)
 
 
 def replace_sx1302_global_conf_with_regional(root_dir,
@@ -195,8 +204,7 @@ def replace_sx1302_global_conf_with_regional(root_dir,
     with open(region_config_filepath) as region_config_file:
         new_global_conf = json.load(region_config_file)
 
-    with open(old_local_config_filepath) as local_config_file:
-        local_conf = json.load(local_config_file)
+    local_conf = load_local_conf(old_local_config_filepath)
 
     merged_global_conf = dict(new_global_conf)
     merged_global_conf.update(local_conf)
@@ -215,8 +223,8 @@ def replace_sx1302_global_conf_with_regional(root_dir,
 
     LOGGER.debug("Copying SX1302 local conf from %s to %s" %
                  (old_local_config_filepath, local_config_filepath))
-    populate_local_conf_template(old_local_config_filepath)
-    copyfile(old_local_config_filepath, local_config_filepath)
+    with open(local_config_filepath, 'w') as local_config_file:
+        json.dump(local_conf, local_config_file)
 
 
 @retry(wait=wait_fixed(LORA_PKT_FWD_AFTER_FAILURE_SLEEP_SECONDS),
@@ -254,7 +262,11 @@ def retry_start_concentrator(is_sx1302, spi_bus,
 
         # lora_pkt_fwd is running, sleep then poll again.
         if lora_pkt_fwd_proc_is_running:
-            sleep(LORA_PKT_FWD_AFTER_SUCCESS_SLEEP_SECONDS)
+            try:
+                lora_pkt_fwd_proc.wait(
+                    timeout=LORA_PKT_FWD_AFTER_SUCCESS_SLEEP_SECONDS)
+            except subprocess.TimeoutExpired:
+                pass
 
         # lora_pkt_fwd exited without error. Attempt to restart the process
         # by throwing an exception, which will trigger retry.

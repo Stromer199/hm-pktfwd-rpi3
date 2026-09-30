@@ -14,6 +14,7 @@
         "keepalive_interval": 10,
         "stat_interval": 30,
         "push_timeout_ms": 100,
+        "autoquit_threshold": 6,
         "forward_crc_valid": true,
         "forward_crc_error": false,
         "forward_crc_disabled": false
